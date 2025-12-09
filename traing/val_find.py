@@ -6,8 +6,8 @@ except ModuleNotFoundError:  # pragma: no cover
     from starlette.responses import FileResponse  # type: ignore[import]
 import os, re, shutil
 from glob import glob
-from user_utils import runs_root, validate_user_name
-from thumbs import THUMBS_BASE_DIR
+from utils.user_utils import runs_root, validate_user_name
+from utils.thumbs import THUMBS_BASE_DIR
 _validate_user_name = validate_user_name
 _runs_root = runs_root
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 import os, json, datetime
-from user_utils import normalize_user_name
+from utils.user_utils import normalize_user_name
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATASET_STATUS_FILE = os.path.join(BASE_DIR, "dataset_status_map.json")

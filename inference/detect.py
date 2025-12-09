@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, Form, File, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
 import subprocess, shutil, uuid, sys, os, time, asyncio
 from pathlib import Path
-from user_utils import runs_root, ensure_user_name
+from utils.user_utils import runs_root, ensure_user_name
 
 router = APIRouter(
     prefix="/yolov9",
@@ -212,7 +212,7 @@ def download_result_file(user_name: str, run_id: str, file_name: str):
     file_path = DETECT_DOWNLOAD_BASE / user_name / "detect" / run_id / file_name
 
     if not file_path.is_file():
-        print("error": "檔案不存在")
+        print("error: 檔案不存在")
         return {"error": "檔案不存在"}
 
     return FileResponse(file_path, media_type="application/octet-stream", filename=file_name)

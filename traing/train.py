@@ -22,7 +22,7 @@ from typing import Optional
 from contextlib import contextmanager
 from pathlib import Path
 
-from user_utils import (
+from utils.user_utils import (
     ensure_user_name,
     extract_user_from_dataset_name,
     normalize_user_name,

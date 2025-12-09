@@ -4,7 +4,7 @@ import os, uuid, zipfile, shutil, subprocess, json, threading, random
 from datetime import datetime
 
 import dataset_pipeline as dp
-from user_utils import ensure_user_name
+from utils.user_utils import ensure_user_name
 
 
 router = APIRouter(
