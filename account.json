@@ -1,0 +1,22 @@
+{
+  "Stephen.Chen": {
+    "email": "Stephen.Chen@primax.com.tw",
+    "password": "123",
+    "permit": false
+  },
+  "brad.chen": {
+    "email": "brad.chen@primax.com.tw",
+    "password": "123",
+    "permit": true
+  },
+  "ward.huang": {
+    "email": "ward.huang@primax.com.tw",
+    "password": "123",
+    "permit": false
+  },
+  "nahida.wang": {
+   "email": "Nahida.Wang@primax.com.tw",
+   "password": "123",
+   "permit": true
+  }
+}
