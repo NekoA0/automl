@@ -12,6 +12,8 @@ router = APIRouter(
 _ensure_user_name = ensure_user_name
 _runs_root = runs_root
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+YOLO_DETECT_PATH = ROOT_DIR / "yolov9" / "detect.py"
 DETECT_DOWNLOAD_BASE = Path("/shared") /"download"
 TRAIN_SUBPATH_BEST   = Path("exp") /"weights" /"best.pt"
 TRAIN_SUBPATH_LAST   = Path("exp") /"weights" /"last.pt"
@@ -92,7 +94,7 @@ def run_detect(run_id: str, image_path: str, weights_path: str, user_name: str):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = [
-        sys.executable, "./yolov9/detect.py",
+        sys.executable, YOLO_DETECT_PATH,
         "--project",    detect_dir,
         "--source",     image_path,
         "--weights",    weights_path,

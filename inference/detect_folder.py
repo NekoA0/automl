@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Request, HTTPException, Form
 import os, uuid, zipfile, subprocess, sys, time, asyncio
+from pathlib import Path
 from fastapi.responses import FileResponse
 from utils.user_utils import runs_root, ensure_user_name
 
@@ -12,6 +13,8 @@ _runs_root = runs_root
 _ensure_user_name = ensure_user_name
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = Path(__file__).resolve().parent.parent
+YOLO_DETECT_PATH = ROOT_DIR / "yolov9" / "detect.py"
 DETECT_DOWNLOAD_BASE = os.path.abspath(os.path.join(os.path.sep, "shared", "download"))
 THUMBS_BASE_DIR = os.path.abspath(os.path.join(os.path.sep, "shared", "Thumbs"))
 TRAIN_SUBPATH_BEST = os.path.join("exp", "weights", "best.pt")
@@ -74,7 +77,7 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
     os.makedirs(shared_run_dir, exist_ok=True)
     
     detect_cmd = [
-        sys.executable, "./yolov9/detect.py",
+        sys.executable,  YOLO_DETECT_PATH,
         "--project",     shared_run_dir,
         "--source",      source_folder,
         "--weights",     weights_path,

@@ -2,8 +2,12 @@ from fastapi import HTTPException
 from pathlib import Path
 import subprocess
 
+
 # 統一常數設定，若 SDK 路徑異動只需改這裡
-SDK_BIN_DIR = Path("20240108_Neuron_SDK_v1.2402.01_neuron-6-0-release/host/bin")
+ROOT_DIR = Path(__file__).resolve()
+PROJECT_ROOT = ROOT_DIR.parent.parent
+
+SDK_BIN_DIR = PROJECT_ROOT / "20240108_Neuron_SDK_v1.2402.01_neuron-6-0-release/host/bin"
 INIT_SCRIPT = SDK_BIN_DIR / "init.sh"
 NCC_TFLITE = SDK_BIN_DIR / "ncc-tflite"
 

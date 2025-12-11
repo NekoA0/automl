@@ -4,7 +4,7 @@ from utils.user_utils import ensure_user_name
 from pathlib import Path
 import subprocess, asyncio
 
-from tflite_to_dla import check_sdk_layout, build_tflite2dla_shell
+from deployment.tflite_to_dla import check_sdk_layout, build_tflite2dla_shell
 
 router = APIRouter(
     prefix="/yolov9",

@@ -8,11 +8,11 @@ router = APIRouter(
     prefix="/yolov9",
     tags=["EXPORT"],
 )
-
-# Resolve absolute paths based on this file's location to avoid CWD issues
-ROOT_DIR = Path(__file__).resolve().parent
 _ensure_user_name = ensure_user_name
 _runs_root = runs_root
+
+ROOT_DIR = Path(__file__).resolve().parent
+YOLO_EXPORT = (ROOT_DIR.parent / "yolov9" / "export.py").resolve()
 MODEL_DIR = ROOT_DIR / "yolov9" / "models" / "detect"
 SHARED_DIR = Path("/shared")
 DOWNLOAD_ROOT = SHARED_DIR / "download"
@@ -50,7 +50,7 @@ def run_export_tiny(id1: str, task: str, user_name: str | None = None):
     
 
     command = [
-        sys.executable, "./yolov9/export.py",
+        sys.executable, YOLO_EXPORT,
         "--weights", str(pt_path),
         "--include", "onnx",
         "--batch-size", "1",

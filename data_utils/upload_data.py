@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import os, uuid, zipfile, shutil, subprocess, json, threading, random
 from datetime import datetime
 
-import dataset_pipeline as dp
+import data_utils.dataset_pipeline as dp
 from utils.user_utils import ensure_user_name
 
 
@@ -14,13 +14,15 @@ router = APIRouter(
 
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_DATA_DIR = os.path.join(BASE_DIR, "upload_data_folder")
-DATASET_DIR = os.path.join(BASE_DIR, "Dataset")
-DATASET_HOME_DIR = os.path.join(BASE_DIR, "dataset_home")
-THUMBS_BASE_DIR = os.path.abspath(os.path.join(os.path.sep, "shared", "Thumbs"))
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, os.pardir))
 
-# Dataset 狀態檔與鎖
-DS_STATUS_FILE = os.path.join(BASE_DIR, "dataset_status_map.json")
+UPLOAD_DATA_DIR   = os.path.join(ROOT_DIR, "upload_data_folder")
+DATASET_DIR       = os.path.join(ROOT_DIR, "Dataset")
+DATASET_HOME_DIR  = os.path.join(ROOT_DIR, "dataset_home")
+THUMBS_BASE_DIR   = os.path.abspath(os.path.join(os.path.sep, "shared", "Thumbs"))
+
+# Dataset 狀態檔與鎖（移到專案根）
+DS_STATUS_FILE    = os.path.join(ROOT_DIR, "dataset_status_map.json")
 ds_status_lock = threading.Lock()
 
 
@@ -560,7 +562,7 @@ async def _upload_data_zip_impl(
         dest_abs = os.path.join(THUMBS_BASE_DIR, safe_user, safe_dataset)
         os.makedirs(dest_abs, exist_ok=True)
         gen_thumbs_log = os.path.join(dest_abs, "thumbs.log")
-        _run_gen_thumbs(BASE_DIR, src_abs, dest_abs, txt_abs, gen_thumbs_log)
+        _run_gen_thumbs(ROOT_DIR, src_abs, dest_abs, txt_abs, gen_thumbs_log)
     # 將產生於 /shared/Thumbs 的 thumbs.json 搬/複製到 dataset_home 目前版本與版本目錄
         thumbs_json_src = os.path.join(dest_abs, 'thumbs.json')
         active_json = None
@@ -614,7 +616,7 @@ async def _upload_data_zip_impl(
 
     # 最終更新資料集狀態（扁平清單）：寫入最終 {name, count, created_date, updated_date}
     try:
-        img_count = _count_images_in_dataset(BASE_DIR, safe_user, safe_dataset)
+        img_count = _count_images_in_dataset(ROOT_DIR, safe_user, safe_dataset)
         _status_list_upsert(safe_user, safe_dataset, int(img_count), now_str)
     except Exception:
         pass
@@ -745,7 +747,7 @@ async def _append_to_specific_split_impl(
         dest_abs = os.path.join(THUMBS_BASE_DIR, safe_user, safe_project)
         os.makedirs(dest_abs, exist_ok=True)
         log_path = os.path.join(dest_abs, "thumbs.log")
-        _run_gen_thumbs(BASE_DIR, src_abs, dest_abs, txt_abs, log_path)
+        _run_gen_thumbs(ROOT_DIR, src_abs, dest_abs, txt_abs, log_path)
         # 同步 thumbs.json 至目前啟用與版本資料夾
         try:
             thumbs_json_src = os.path.join(dest_abs, 'thumbs.json')
@@ -787,7 +789,7 @@ async def _append_to_specific_split_impl(
         if desired_nc > len(merged_names):
             for i in range(len(merged_names), desired_nc):
                 merged_names.append(f"cls_{i}")
-        _write_dataset_yaml(BASE_DIR, safe_user, safe_project, merged_names)
+        _write_dataset_yaml(ROOT_DIR, safe_user, safe_project, merged_names)
     except Exception:
         pass
 
@@ -796,7 +798,7 @@ async def _append_to_specific_split_impl(
     try:
         time_fmt = "%Y-%m-%d %H:%M:%S"
         now_str2 = datetime.now().strftime(time_fmt)
-        img_count2 = _count_images_in_dataset(BASE_DIR, safe_user, safe_project)
+        img_count2 = _count_images_in_dataset(ROOT_DIR, safe_user, safe_project)
         _status_list_upsert(safe_user, safe_project, int(img_count2), now_str2)
     except Exception:
         pass
@@ -911,7 +913,7 @@ def remove_by_part(req: RemoveRequest):
             dest_abs = os.path.join(THUMBS_BASE_DIR, safe_user, safe_dataset)
             os.makedirs(dest_abs, exist_ok=True)
             log_path = os.path.join(dest_abs, 'thumbs.log')
-            _run_gen_thumbs(BASE_DIR, src_abs, dest_abs, txt_abs, log_path)
+            _run_gen_thumbs(ROOT_DIR, src_abs, dest_abs, txt_abs, log_path)
             # 複製 thumbs.json 至 dataset_home 根與版本資料夾
             try:
                 thumbs_json_src = os.path.join(dest_abs, 'thumbs.json')

@@ -1,0 +1,9 @@
+WEIGHTS:str     =""
+CFG:str         ="./yolov9/models/detect/gelan-t.yaml"
+#HYP:str         ="./yolov9/data/hyps/hyp.scratch-high.yaml"
+#BATCH_SIZE:int  =16
+#IMG_SIZE:int    =320
+#DEVICE:int      =0
+SEED:int        =0
+WORKERS:int     =2
+#CLOSE_MOSAIC:int=15

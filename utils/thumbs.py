@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Form, HTTPException
-from user_utils import ensure_user_name
+from utils.user_utils import ensure_user_name
 from typing import Optional
 import os, json
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-THUMBS_BASE_DIR = os.path.abspath(os.path.join(os.path.sep, "shared", "Thumbs"))
-DATASET_HOME_DIR = os.path.join(BASE_DIR, "dataset_home")
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, os.pardir))
 
+DATASET_HOME_DIR  = os.path.join(ROOT_DIR, "dataset_home")
+THUMBS_BASE_DIR   = os.path.abspath(os.path.join(os.path.sep, "shared", "Thumbs"))
 _ensure_user_name = ensure_user_name
 
 router = APIRouter(

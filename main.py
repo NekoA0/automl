@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from traing import train, val, val_find, hyp, hyp_find
+from training import train, val, val_find, hyp, hyp_find
 from inference import detect, detect_folder
 from deployment import export, onnx_to_tflite
 from data_utils import dataset_list, upload_data

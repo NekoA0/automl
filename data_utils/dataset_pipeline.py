@@ -12,6 +12,7 @@ from typing import Any
 
 IMAGE_EXTS: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff")
 IMAGE_EXTS_SET = {ext.lower() for ext in IMAGE_EXTS}
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @dataclass

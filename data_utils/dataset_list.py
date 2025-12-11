@@ -3,8 +3,10 @@ import os, json, datetime
 from utils.user_utils import normalize_user_name
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DATASET_STATUS_FILE = os.path.join(BASE_DIR, "dataset_status_map.json")
-DATASET_HOME_DIR = os.path.join(BASE_DIR, "dataset_home")  # 相對於專案根目錄調整可視需要
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, os.pardir))
+
+DATASET_STATUS_FILE = os.path.join(ROOT_DIR, "dataset_status_map.json")
+DATASET_HOME_DIR    = os.path.join(ROOT_DIR, "dataset_home")
 
 router = APIRouter(
     prefix="/yolov9",
