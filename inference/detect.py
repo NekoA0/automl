@@ -42,7 +42,6 @@ def _latest_version(user: str, project: str, task: str) -> str | None:
     if not base.is_dir():
         print(f"找不到資料夾：{base}")
         return None
-    
     mx = -1
     latest = None
 
@@ -87,25 +86,25 @@ def _resolve_weights(user: str, project: str, task: str, version: str | None):
 
 
 
-def run_detect(run_id: str, image_path: str, weights_path: str, user_name: str):
+def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name: str, save_txt: bool = False):
 
     detect_dir = DETECT_DOWNLOAD_BASE / user_name / "detect"
     output_dir = detect_dir / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = [
-        sys.executable, YOLO_DETECT_PATH,
-        "--project",    detect_dir,
-        "--source",     image_path,
-        "--weights",    weights_path,
+        sys.executable, str(YOLO_DETECT_PATH),
+        "--project",    str(detect_dir),
+        "--source",     str(image_path),
+        "--weights",    str(weights_path),
         "--name",       run_id,
         "--exist-ok",
     ]
+    if save_txt:
+        command.append("--save-txt")
 
     log_path = output_dir / "log.txt"
     start_ts = time.time()
-
-    from pathlib import Path
 
     download_log = "/" + str(Path("download") / user_name / "detect" / run_id / "log.txt").replace("\\","/")
     download_dir = "/" + str(Path("download") / user_name / "detect" / run_id).replace("\\", "/")
@@ -140,14 +139,15 @@ async def Detectation(
     file: UploadFile    = File(..., description="上傳圖片"),
     PROJECT: str        = Form("", description="專案(上層)名稱"),
     TASK: str           = Form("", description="訓練名稱"),
-    VERSION: str        = Form("", description="版本，可留空使用最新")):
+    VERSION: str        = Form("", description="版本，可留空使用最新"),
+    SAVE_TXT: bool      = Form(False, description="是否輸出 txt 標註")):
 
     # 基礎驗證與正規化
     USER_NAME = _ensure_user_name(USER_NAME)
     _validate_task(PROJECT)
     _validate_task(TASK)
     ver = VERSION.strip() or None
-    weights_path = _resolve_weights(USER_NAME, PROJECT.strip(), TASK.strip(), ver)
+    weights_path, _ = _resolve_weights(USER_NAME, PROJECT.strip(), TASK.strip(), ver)
 
     # 保存圖片
     upload_dir = Path(_runs_root(USER_NAME)) / "uploads"
@@ -158,13 +158,14 @@ async def Detectation(
         shutil.copyfileobj(file.file, img)
 
     run_id = str(uuid.uuid4())[:8]
-    status = await asyncio.to_thread(run_detect, run_id, image_path, weights_path, USER_NAME)
+    status = await asyncio.to_thread(run_detect, run_id, image_path, weights_path, USER_NAME, SAVE_TXT)
     
     if status.get("state") != "done":
         print(status.get("error", "偵測失敗"))
         raise HTTPException(status_code=500, detail=status.get("error", "偵測失敗"))
 
-    output_dir = status.get("output_dir") or DETECT_DOWNLOAD_BASE / USER_NAME / "detect" / run_id
+    output_dir_value = status.get("output_dir") or DETECT_DOWNLOAD_BASE / USER_NAME / "detect" / run_id
+    output_dir = Path(output_dir_value)
 
     result_path = None
     if output_dir.is_dir():
