@@ -1,8 +1,9 @@
 from fastapi import APIRouter, UploadFile, Form, File, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
-import subprocess, shutil, uuid, sys, os, time, asyncio
+import subprocess, shutil, uuid, sys, os, time, asyncio, json
 from pathlib import Path
 from utils.user_utils import runs_root, ensure_user_name
+from deployment.yolo_to_xanylabeling import convert_yolo_to_xanylabeling
 
 router = APIRouter(
     prefix="/yolov9",
@@ -86,7 +87,7 @@ def _resolve_weights(user: str, project: str, task: str, version: str | None):
 
 
 
-def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name: str, save_txt: bool = False):
+def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name: str, save_txt: bool = False, project: str = "", task: str = ""):
 
     detect_dir = DETECT_DOWNLOAD_BASE / user_name / "detect"
     output_dir = detect_dir / run_id
@@ -119,6 +120,55 @@ def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name
                     "log": download_log,
                 }
             else:
+                # 若需要轉換為 xanylabeling 格式
+                if save_txt:
+                    try:
+                        ct_file = ROOT_DIR / "create_train_status_map.json"
+                        dataset_name = None
+                        if ct_file.exists():
+                            try:
+                                with open(ct_file, 'r', encoding='utf-8') as f:
+                                    ct_map = json.load(f)
+                                key = f"{user_name}|{project}|{task}"
+                                if key in ct_map:
+                                    dataset_name = ct_map[key].get("dataset")
+                            except Exception:
+                                pass
+                        
+                        if dataset_name:
+                            yaml_path = ROOT_DIR / "yolov9" / "Dataset" / user_name / dataset_name / "data.yaml"
+                            labels_dir = output_dir / "labels"
+                            
+                            if yaml_path.exists() and labels_dir.exists():
+                                # 讀取類別名稱
+                                with open(yaml_path, 'r', encoding='utf-8') as f:
+                                    import yaml
+                                    data = yaml.safe_load(f)
+                                    class_names = data['names']
+                                
+                                # 轉換單張圖片的標註
+                                img_path = Path(image_path)
+                                txt_file = labels_dir / f"{img_path.stem}.txt"
+                                
+                                if txt_file.exists():
+                                    # 這裡需要使用偵測結果的圖片尺寸，但 detect.py 輸出的是畫框後的圖
+                                    # 為了準確，我們讀取原始上傳圖片的尺寸
+                                    # 注意：如果 detect.py 有 resize，這裡可能會有誤差，但通常 detect.py 輸出圖與原圖尺寸一致或等比例
+                                    # 這裡我們直接用原始圖片路徑
+                                    
+                                    xany_json = convert_yolo_to_xanylabeling(
+                                        txt_path=str(txt_file),
+                                        image_path=str(image_path),
+                                        class_names=class_names
+                                    )
+                                    
+                                    # 儲存 JSON 到輸出目錄
+                                    json_file = output_dir / f"{img_path.stem}.json"
+                                    with open(json_file, 'w', encoding='utf-8') as f:
+                                        json.dump(xany_json, f, indent=2, ensure_ascii=False)
+                    except Exception as e:
+                        print(f"XanyLabeling conversion failed: {e}")
+
                 status = {
                     "state": "done",
                     "log": download_log,
@@ -140,7 +190,7 @@ async def Detectation(
     PROJECT: str        = Form("", description="專案(上層)名稱"),
     TASK: str           = Form("", description="訓練名稱"),
     VERSION: str        = Form("", description="版本，可留空使用最新"),
-    SAVE_TXT: bool      = Form(False, description="是否輸出 txt 標註")):
+    SAVE_TXT: bool      = Form(True, description="是否輸出 txt 標註")):
 
     # 基礎驗證與正規化
     USER_NAME = _ensure_user_name(USER_NAME)
@@ -158,7 +208,7 @@ async def Detectation(
         shutil.copyfileobj(file.file, img)
 
     run_id = str(uuid.uuid4())[:8]
-    status = await asyncio.to_thread(run_detect, run_id, image_path, weights_path, USER_NAME, SAVE_TXT)
+    status = await asyncio.to_thread(run_detect, run_id, image_path, weights_path, USER_NAME, SAVE_TXT, PROJECT, TASK)
     
     if status.get("state") != "done":
         print(status.get("error", "偵測失敗"))

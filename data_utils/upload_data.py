@@ -1,11 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-import os, uuid, zipfile, shutil, subprocess, json, threading, random
-import yaml
+import uuid, zipfile, shutil, subprocess, json, threading, yaml
 from datetime import datetime
 from pathlib import Path
 import data_utils.dataset_pipeline as dp
 from utils.user_utils import ensure_user_name
-from data_utils import new_split_dataset
 
 router = APIRouter(
     prefix="/yolov9",
@@ -256,33 +254,6 @@ def _run_gen_thumbs(base_dir: str | Path, src_path: str | Path, dest_path: str |
         pass
 
 
-def _scan_label_max_id(labels_root: str | Path) -> int:
-    """遞迴掃描 labels_root 下的 YOLO 標註檔，回傳最大類別編號；若不存在則回傳 -1。"""
-    max_id = -1
-    labels_root = Path(labels_root)
-    for root, _dirs, files in os.walk(labels_root):
-        for fn in files:
-            if not fn.lower().endswith('.txt'):
-                continue
-            fpath = Path(root) / fn
-            try:
-                with fpath.open('r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        parts = line.split()
-                        try:
-                            cid = int(parts[0])
-                            if cid > max_id:
-                                max_id = cid
-                        except Exception:
-                            continue
-            except Exception:
-                continue
-    return max_id
-
-
 def _generate_split_txt_balanced(images_dir: str, labels_dir: str, out_dir: str, rare_obj_thresh: int = 30) -> bool:
     """
     使用 new_split_dataset.py (subprocess) 生成 out_dir 下的 train/val/test.txt。
@@ -292,20 +263,25 @@ def _generate_split_txt_balanced(images_dir: str, labels_dir: str, out_dir: str,
         
         # 建構指令
         # 注意：不使用 --summary-only，因為需要產生 txt 分割檔
+        # 修正: 使用 Path 操作來正確指向 class.txt
+        class_txt_path = Path(labels_dir).parent / "class.txt"
+
         cmd = [
-            "python",
-            str(script_path),
+            "python",   str(script_path),
             "--images", str(images_dir),
             "--labels", str(labels_dir),
-            "--out", str(out_dir),
+            "--out",    str(out_dir),
             "--rare-obj-thresh", str(rare_obj_thresh),
+            "--class-txt",       str(class_txt_path),
             "--seed", "1"
         ]
+        
         
         # 執行
         subprocess.run(cmd, check=True, cwd=str(BASE_DIR))
         return True
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] _generate_split_txt_balanced failed: {e}")
         return False
 
 
@@ -385,8 +361,13 @@ async def _upload_data_zip_impl(
         raise HTTPException(status_code=400, detail="zip 檔損毀，無法解壓縮")
 
     # 7. 處理 class.txt
-    # 優先檢查是否已包含 class.txt，若無則嘗試從 YAML 解析，再無則使用 extract_nc_names 掃描 JSON
-    found_class_txt = list(extract_root.rglob("class.txt"))
+    # 優先檢查是否已包含 class.txt (忽略大小寫)，若無則嘗試從 YAML 解析，再無則使用 extract_nc_names 掃描 JSON
+    found_class_txt = []
+    for f in extract_root.rglob("*"):
+        if f.is_file() and f.name.lower() == "class.txt":
+            found_class_txt.append(f)
+            break
+
     if found_class_txt:
         try:
             shutil.copy2(found_class_txt[0], extract_base / "class.txt")

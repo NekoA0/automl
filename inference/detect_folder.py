@@ -1,8 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Request, HTTPException, Form
-import os, uuid, zipfile, subprocess, sys, time, asyncio
+import os, uuid, zipfile, subprocess, sys, time, asyncio, json
 from pathlib import Path
 from fastapi.responses import FileResponse
 from utils.user_utils import runs_root, ensure_user_name
+from deployment.yolo_to_xanylabeling import batch_convert
 
 router = APIRouter(
     prefix="/yolov9",
@@ -76,7 +77,7 @@ def find_imag(base_dir):
 
     return None
 
-def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: str | None = None, save_txt: bool = False):
+def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: str | None = None, save_txt: bool = False, project: str = "", task: str = ""):
     user_norm = _ensure_user_name(user_name)
 
     shared_run_dir  = DETECT_DOWNLOAD_BASE / user_norm / "detect_folder" / run_id
@@ -97,11 +98,11 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
     with open(detect_log_path, "w") as log_file:
         result = subprocess.run(detect_cmd, stdout=log_file, stderr=subprocess.STDOUT)
     if result.returncode != 0:
-        return
+        return {"state": "failed", "error": "Detect process failed"}
     time.sleep(0.5)
 
     # 產生縮圖，並將縮圖日誌記錄在 /shared/Thumbs/<user>/<run_id>/thumbs.log
-    thumbs_run_dir  = THUMBS_BASE_DIR / user_norm, run_id
+    thumbs_run_dir  = THUMBS_BASE_DIR / user_norm / run_id
     thumbs_run_dir.mkdir(parents=True, exist_ok=True)
     thumbs_log_path = thumbs_run_dir / "thumbs.log"
 
@@ -116,37 +117,75 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
                 log_file.write("GenThumbs executable not found. Skipping thumbnail generation.\n")
             else:
                 thumbs_cmd = [
-                    gen_thumbs_exec,
-                    "--src",  shared_run_dir / "exp"
-                    "--dest", thumbs_run_dir,
+                    str(gen_thumbs_exec),
+                    "--src",  str(shared_run_dir / "exp"),
+                    "--dest", str(thumbs_run_dir),
                 ]
                 subprocess.run(thumbs_cmd, stdout=log_file, stderr=subprocess.STDOUT)
 
-    time.sleep(3)
     # 壓縮結果資料夾為 zip 檔，放在 /shared/download/detect_zips/<user>/<run_id>.zip
     try:
-        result_dir = shared_run_dir
         zip_output_dir = DETECT_DOWNLOAD_BASE / user_norm / 'detect_zips'
         zip_output_dir.mkdir(parents=True, exist_ok=True)
-
         zip_output_path = zip_output_dir / f"{run_id}.zip"
+
+        target_dir = shared_run_dir
+        
+        if save_txt:
+            # 嘗試轉換為 xanylabeling 格式
+            ct_file = ROOT_DIR / "create_train_status_map.json"
+            dataset_name = None
+            if ct_file.exists():
+                try:
+                    with open(ct_file, 'r', encoding='utf-8') as f:
+                        ct_map = json.load(f)
+                    key = f"{user_norm}|{project}|{task}"
+                    if key in ct_map:
+                        dataset_name = ct_map[key].get("dataset")
+                except Exception as e:
+                    print(f"Error reading status map: {e}")
+            
+            if dataset_name:
+                yaml_path = ROOT_DIR  / "Dataset" / user_norm / dataset_name / "data.yaml"
+                
+                # 檢查 exp 目錄
+                exp_dir = shared_run_dir / "exp"
+                if not exp_dir.exists():
+                     exp_dir = shared_run_dir
+                
+                labels_dir = exp_dir / "labels"
+                
+                if yaml_path.exists() and labels_dir.exists():
+                    print(f"Converting labels... {labels_dir} -> {source_folder}")
+                    batch_convert(
+                        images_dir=str(source_folder),
+                        labels_dir=str(labels_dir),
+                        yaml_path=str(yaml_path)
+                    )
+                    # 如果轉換成功，目標目錄改為 source_folder (包含原圖和 json)
+                    target_dir = source_folder
+                else:
+                    print(f"Missing yaml or labels: {yaml_path}, {labels_dir}")
+
         with zipfile.ZipFile(zip_output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_path in result_dir.rglob("*"):
+            for file_path in target_dir.rglob("*"):
                 if file_path.is_file():
-                    arcname = file_path.relative_to(result_dir)
+                    arcname = file_path.relative_to(target_dir)
                     zipf.write(file_path, arcname)
-    except Exception:
-        pass
+        
+        return {"state": "done"}
+    except Exception as e:
+        return {"state": "failed", "error": str(e)}
     
 @router.post("/upload-zip-detect")
 async def upload_zip_detect(
     request: Request,
     USER_NAME: str      = Form("", description="使用者名稱"),
-    file: UploadFile    = File(..., description="上傳zip資料集"),
+    file: UploadFile    = File(...,description="上傳zip資料集"),
     PROJECT: str        = Form("", description="專案(上層)名稱"),
     TASK: str           = Form("", description="訓練名稱"),
     VERSION: str        = Form("", description="版本，可省略使用最新"),
-    SAVE_TXT: bool      = Form(False, description="是否輸出 txt 標註")):
+    SAVE_TXT: bool      = Form(True, description="是否輸出 txt 標註")):
     
     if not file.filename.endswith(".zip"):
         return {"error": "請上傳 zip 檔"}
@@ -187,7 +226,7 @@ async def upload_zip_detect(
     _validate_task(TASK)
     weights_path, _ = _resolve_weights(USER_NAME, PROJECT.strip(), TASK.strip(), VERSION.strip() or None)
 
-    status = await asyncio.to_thread(run_detect, run_id, real_source_dir, weights_path, USER_NAME, SAVE_TXT)
+    status = await asyncio.to_thread(run_detect, run_id, real_source_dir, weights_path, USER_NAME, SAVE_TXT, PROJECT, TASK)
 
     if status.get("state") != "done":
         print(status.get("error", "偵測失敗"))

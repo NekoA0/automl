@@ -319,8 +319,8 @@ def main():
     ap.add_argument("--rare-obj-thresh", type=int, default=30, help="稀有類別目標數閾值（全部放入train）")
     ap.add_argument("--copy-files", type=str, default="false", help="是否複製檔案（true/false）")
     ap.add_argument("--summary-only", action="store_true", help="僅生成彙整，不分割")
-    ap.add_argument("--class-names", type=str, default=None, 
-                    help="類別名稱列表（逗號分隔，例如：car,person,bike）")
+    ap.add_argument("--class-names", type=str, default=None, help="類別名稱列表（逗號分隔，例如：car,person,bike）")
+    ap.add_argument("--class-txt", type=Path, default=None, help="類別名稱檔案路徑（一行一個類別）")
     args = ap.parse_args()
 
     # 初始化
@@ -331,7 +331,10 @@ def main():
 
     # 處理類別名稱
     class_names = None
-    if args.class_names:
+    if args.class_txt and args.class_txt.exists():
+        content = args.class_txt.read_text(encoding="utf-8")
+        class_names = [line.strip() for line in content.splitlines() if line.strip()]
+    elif args.class_names:
         class_names = [name.strip() for name in args.class_names.split(",")]
 
     # 1. 掃描資料集
