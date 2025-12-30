@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Scan a folder of LabelMe-style JSON annotation files, collect unique labels,
-compute nc (number of classes), and list names. Optionally write a YOLO-style YAML.
+掃描 LabelMe 格式的 JSON 標註檔案資料夾，收集唯一的標籤，
+計算 nc（類別數量），並列出名稱。可選擇寫入 YOLO 格式的 YAML 檔案。
 
-Usage (Windows PowerShell examples):
-    # 直接运行，弹出资料夹选择器（Windows GUI），选择后自动执行
+用法（Windows PowerShell 範例）：
+    # 直接執行，彈出資料夾選擇器（Windows GUI），選擇後自動執行
     python scripts/extract_nc_names.py
 
-    # 指定资料夹（不弹窗）
+    # 指定資料夾（不彈窗）
     python scripts/extract_nc_names.py --dir .
     python scripts/extract_nc_names.py --dir . --yaml dataset.yaml
 
-Notes:
-- Assumes each JSON has a top-level key "shapes" which is a list of objects with a "label" field.
-- Skips files that are invalid JSON or missing the expected keys.
+注意：
+- 假設每個 JSON 都有一個頂層鍵 "shapes"，其值為包含 "label" 欄位的物件列表。
+- 跳過無效的 JSON 或缺少預期鍵的檔案。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Set, Tuple
+from typing import Iterable, List, Set
 
 
 @dataclass
@@ -37,7 +37,7 @@ class Summary:
 
 
 def read_json_labels(path: Path) -> Iterable[str]:
-    """Yield labels from a single JSON file if it matches the expected schema."""
+    """如果符合預期格式，則從單個 JSON 檔案中產生標籤。"""
     try:
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -59,7 +59,7 @@ def collect_labels(folder: Path, recursive: bool = False) -> Summary:
     labels: Set[str] = set()
     counts: dict[str, int] = {}
     for p in folder.glob(pattern):
-        # Avoid catching directories named *.json (unlikely but safe guard)
+        # 避免抓取名為 *.json 的目錄（不太可能發生，但作為安全防護）
         if not p.is_file():
             continue
         for label in read_json_labels(p):
@@ -77,31 +77,31 @@ def write_yaml(
     include_counts: bool = False,
     style: str = "list",
 ) -> None:
-    """Write a minimal YOLO-style dataset YAML with nc and names.
+    """寫入包含 nc 和 names 的最小 YOLO 格式資料集 YAML。
 
-    If include_counts is True, also append a counts mapping section.
+    如果 include_counts 為 True，則同時附加計數映射區段。
     """
     if yaml_path.exists() and not overwrite:
-        raise FileExistsError(f"Refusing to overwrite existing file: {yaml_path}")
+        raise FileExistsError(f"拒絕覆蓋現有檔案：{yaml_path}")
     yaml_text = build_yaml_content(summary, include_counts=include_counts, style=style)
     yaml_path.write_text(yaml_text, encoding="utf-8")
 
 
 def _yaml_quote_scalar(s: str) -> str:
-    """Quote a YAML scalar safely using double quotes and minimal escapes.
+    """使用雙引號和最少的跳脫字元安全地引用 YAML 純量。
 
-    This avoids pulling in PyYAML just for emitting a tiny YAML.
+    這避免了僅為了輸出微小的 YAML 而引入 PyYAML。
     """
-    # Replace backslash and double quotes, normalize newlines/tabs.
+    # 替換反斜線和雙引號，標準化換行符/製表符。
     s = s.replace("\\", "\\\\").replace('"', '\\"')
     s = s.replace("\r\n", " ").replace("\n", " ").replace("\t", " ")
     return f'"{s}"'
 
 
 def _yaml_single_quoted(s: str) -> str:
-    """Return YAML single-quoted scalar. Single quotes are escaped by doubling.
+    """返回 YAML 單引號純量。單引號通過重複兩次來跳脫。
 
-    Newlines/tabs are normalized to spaces for compact one-line output.
+    換行符/製表符被標準化為空格，以便進行緊湊的單行輸出。
     """
     s = s.replace("\r\n", " ").replace("\n", " ").replace("\t", " ")
     s = s.replace("'", "''")
@@ -109,21 +109,21 @@ def _yaml_single_quoted(s: str) -> str:
 
 
 def build_yaml_content(summary: Summary, *, include_counts: bool = False, style: str = "list") -> str:
-    """Return a minimal YOLO-style YAML text with nc and names.
+    """返回包含 nc 和 names 的最小 YOLO 格式 YAML 文字。
 
-    Args:
-        include_counts: When True, also include a counts mapping.
-        style: 'list' (default) to emit names as a YAML list; 'map' to emit name->id mapping.
+    參數：
+        include_counts: 當為 True 時，也包含計數映射。
+        style: 'list'（預設）將名稱輸出為 YAML 列表；'map' 輸出 name->id 映射。
     """
     content_lines = [f"nc: {summary.nc}"]
 
-    # names section
+    # names 區段
     if style == "map":
         content_lines.append("names:")
         for idx, name in enumerate(summary.names):
             content_lines.append(f"  {_yaml_quote_scalar(name)}: {idx}")
     elif style == "flow":
-        # YAML flow sequence on a single line: names: ['a','b']
+        # 單行 YAML 流程序列：names: ['a','b']
         items = ",".join(_yaml_single_quoted(n) for n in summary.names)
         content_lines.append(f"names: [{items}]")
     else:
@@ -131,21 +131,21 @@ def build_yaml_content(summary: Summary, *, include_counts: bool = False, style:
         for name in summary.names:
             content_lines.append(f"  - {_yaml_quote_scalar(name)}")
 
-    # optional counts section
+    # 可選的計數區段
     if include_counts and summary.counts:
         content_lines.append("counts:")
-        # Preserve YAML key order by sorting names for deterministic output
+        # 通過對名稱進行排序來保留 YAML 鍵順序，以獲得確定性的輸出
         for name in sorted(summary.names):
             content_lines.append(f"  {_yaml_quote_scalar(name)}: {summary.counts.get(name, 0)}")
     return "\n".join(content_lines) + "\n"
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Extract unique labels from JSONs and compute nc.")
-    parser.add_argument("--dir", dest="dir", default=None, help="Directory containing JSON files (default: prompt a folder picker)")
-    parser.add_argument("--recursive", action="store_true", help="Recurse into subfolders")
-    parser.add_argument("--yaml", dest="yaml", default=None, help="Optional path to write a dataset YAML")
-    parser.add_argument("--yaml-counts", action="store_true", help="Include per-class counts in YAML outputs (print/file)")
+    parser = argparse.ArgumentParser(description="從 JSON 中提取唯一標籤並計算 nc。")
+    parser.add_argument("--dir", dest="dir", default=None, help="包含 JSON 檔案的目錄（預設：彈出資料夾選擇器）")
+    parser.add_argument("--recursive", action="store_true", help="遞迴進入子資料夾")
+    parser.add_argument("--yaml", dest="yaml", default=None, help="寫入資料集 YAML 的可選路徑")
+    parser.add_argument("--yaml-counts", action="store_true", help="在 YAML 輸出（列印/檔案）中包含每個類別的計數")
     parser.add_argument("--yaml-only", action="store_true", help="只輸出 YAML 到標準輸出，不列印其他資訊")
     parser.add_argument(
         "--yaml-style",
@@ -153,15 +153,15 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default="list",
         help="YAML names 的輸出風格：list、map(name->id)、flow(單行 names: ['a','b'])",
     )
-    parser.add_argument("--overwrite", action="store_true", help="Allow overwriting existing YAML file")
-    parser.add_argument("--counts", action="store_true", help="Also print per-class occurrence counts")
-    parser.add_argument("--print-yaml", action="store_true", help="Also print the dataset.yaml content to stdout")
-    parser.add_argument("--nogui", action="store_true", help="Disable GUI folder picker and require --dir")
+    parser.add_argument("--overwrite", action="store_true", help="允許覆蓋現有的 YAML 檔案")
+    parser.add_argument("--counts", action="store_true", help="同時列印每個類別的出現次數")
+    parser.add_argument("--print-yaml", action="store_true", help="同時將 dataset.yaml 內容列印到標準輸出")
+    parser.add_argument("--nogui", action="store_true", help="禁用 GUI 資料夾選擇器並要求 --dir")
     return parser.parse_args(argv)
 
 
 def _select_dir_gui() -> Path | None:
-    """Open a folder picker dialog (tkinter). Returns Path or None if canceled/errors."""
+    """開啟資料夾選擇對話框 (tkinter)。如果取消或出錯則返回 Path 或 None。"""
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -169,7 +169,7 @@ def _select_dir_gui() -> Path | None:
         return None
 
     root = tk.Tk()
-    root.withdraw()  # Hide main window
+    root.withdraw()  # 隱藏主視窗
     try:
         selected = filedialog.askdirectory(title="选择包含 JSON 标注的资料夹")
     finally:
@@ -192,10 +192,10 @@ def main(argv: List[str]) -> int:
             print("未选择资料夹或环境不支持图形界面，请使用 --dir 指定资料夹或加入 --nogui 禁用弹窗。", file=sys.stderr)
             return 2
     else:
-        print("未提供 --dir 且禁用了 GUI（--nogui），无法确定资料夹。", file=sys.stderr)
+        print("未提供 --dir 且禁用了 GUI（--nogui），無法確定資料夾。", file=sys.stderr)
         return 2
 
-    # Validate folder
+    # 驗證資料夾
     if not folder.exists() or not folder.is_dir():
         print(f"Error: Directory not found: {folder}", file=sys.stderr)
         return 2
@@ -235,12 +235,12 @@ def main(argv: List[str]) -> int:
                 include_counts=args.yaml_counts,
                 style=args.yaml_style,
             )
-            print(f"YAML written: {out}")
+            print(f"YAML 已寫入：{out}")
         except FileExistsError as e:
             print(str(e), file=sys.stderr)
             return 3
         except Exception as e:
-            print(f"Failed to write YAML: {e}", file=sys.stderr)
+            print(f"寫入 YAML 失敗：{e}", file=sys.stderr)
             return 4
 
     return 0
