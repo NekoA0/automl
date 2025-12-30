@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from training import train, val, val_find, hyp, hyp_find
 from inference import detect, detect_folder
 from deployment import export, onnx_to_tflite
-from data_utils import dataset_list, upload_data, dataset_remove, dataset_delete
+from data_utils import dataset_list, upload_data
 from utils import project_list, resource_loading, thumbs
 import release_note, login
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,8 +32,6 @@ app.include_router(project_list.router)
 app.include_router(dataset_list.router)
 app.include_router(resource_loading.router)
 app.include_router(upload_data.router)
-app.include_router(dataset_remove.router)
-app.include_router(dataset_delete.router)
 app.include_router(release_note.router)
 app.include_router(thumbs.router)
 app.include_router(login.router)

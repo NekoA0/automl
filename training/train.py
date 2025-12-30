@@ -1080,7 +1080,6 @@ def get_training_status(
     # 不支援多版本彙整
     raise HTTPException(status_code=400, detail="不支援多版本查詢，請提供 version")
 
-
 @router.post("/project/create")
 def create_project(
     user_name: str  = Form("", description="使用者名稱"), 
@@ -1108,7 +1107,6 @@ def create_train(user_name: str        = Form("", description="使用者名稱")
                  task: str             = Form("", description="訓練名稱"),
                  dataset_name: str     = Form("", description="資料集名稱"),
                  dataset_version: str  = Form("", description="資料集版本"),
-                 #weigiht: str          = Form("", description="預設權重檔案"),
                  device: str           = Form("0", description="使用的 GPU 編號 (例如 0 或 0,1)")):
     
     _validate_user_name(user_name)
@@ -1131,17 +1129,16 @@ def create_train(user_name: str        = Form("", description="使用者名稱")
     os.makedirs(project_dir, exist_ok=True)
     # 同步建立 train_log 對應樹，保持相同的層級結構
     os.makedirs(os.path.join(base, "train_log", project, task), exist_ok=True)
-    # 複製預設的 hyp.scratch-high.yaml 至專案目錄
+
+    
     hyp = str(DEFAULT_HYP)
     hyp_scr = os.path.join(project_dir, "hyp.scratch-high.yaml")
     
     if not os.path.isfile(hyp):
-        print("hyp not found:", hyp)
         raise HTTPException(status_code=500, detail=f"找不到預設的 hyp.scratch-high.yaml 檔案：{os.path.normpath(hyp)}")
     try:
         shutil.copyfile(hyp, hyp_scr)
     except Exception as e:
-        print("copy hyp failed:", e)
         raise HTTPException(status_code=500, detail=f"複製 hyp.scratch-high.yaml 失敗：{e}")
 
     # 寫入 create_train_status_map.json（訓練列表需讀取 device 與資料集資訊）

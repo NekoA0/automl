@@ -42,7 +42,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--src", required=True, help="來源資料夾（包含影像；YOLO 標註位於 <src>/labels_yolo）")
     p.add_argument("--out", default=None, help="輸出資料夾（預設為 <src>/dataset_split）")
     p.add_argument("--recursive", action="store_true", help="遞迴掃描子資料夾")
-    p.add_argument("--ratio", default="8,1,1", help="分割比例 train,val,test（例如: 8,1,1）")
+    p.add_argument("--ratio", default="8,2,2", help="分割比例 train,val,test（例如: 8,2,2）")
     p.add_argument("--seed", type=int, default=42, help="隨機種子")
     p.add_argument("--move", action="store_true", help="以移動檔案取代複製")
     p.add_argument("--dry-run", action="store_true", help="僅顯示將要執行的操作，不實際複製/移動")
@@ -55,11 +55,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 def parse_ratio(s: str) -> Tuple[int, int, int]:
     parts = [x.strip() for x in s.split(",") if x.strip()]
     if len(parts) != 3:
-        raise ValueError(f"--ratio 需要三段，以逗號分隔，例如 8,1,1；取得: {s}")
+        raise ValueError(f"--ratio 需要三段，以逗號分隔，例如 8,2,2；取得: {s}")
     try:
         a, b, c = (int(parts[0]), int(parts[1]), int(parts[2]))
     except Exception:
-        raise ValueError(f"--ratio 僅接受整數，例如 8,1,1；取得: {s}")
+        raise ValueError(f"--ratio 僅接受整數，例如 8,2,2；取得: {s}")
     if a < 0 or b < 0 or c < 0 or (a + b + c) <= 0:
         raise ValueError("--ratio 無效：必須為非負整數且總和 > 0")
     return a, b, c

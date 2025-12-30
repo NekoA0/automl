@@ -1,9 +1,8 @@
 from fastapi import APIRouter, UploadFile, Form, File, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
-import subprocess, shutil, uuid, sys, os, time, asyncio, json
+import subprocess, shutil, uuid, sys, os, time, asyncio
 from pathlib import Path
 from utils.user_utils import runs_root, ensure_user_name
-from deployment.yolo_to_xanylabeling import convert_yolo_to_xanylabeling
 
 router = APIRouter(
     prefix="/yolov9",
@@ -43,6 +42,7 @@ def _latest_version(user: str, project: str, task: str) -> str | None:
     if not base.is_dir():
         print(f"找不到資料夾：{base}")
         return None
+    
     mx = -1
     latest = None
 
@@ -87,25 +87,25 @@ def _resolve_weights(user: str, project: str, task: str, version: str | None):
 
 
 
-def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name: str, save_txt: bool = False, project: str = "", task: str = ""):
+def run_detect(run_id: str, image_path: str, weights_path: str, user_name: str):
 
     detect_dir = DETECT_DOWNLOAD_BASE / user_name / "detect"
     output_dir = detect_dir / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = [
-        sys.executable, str(YOLO_DETECT_PATH),
-        "--project",    str(detect_dir),
-        "--source",     str(image_path),
-        "--weights",    str(weights_path),
+        sys.executable, YOLO_DETECT_PATH,
+        "--project",    detect_dir,
+        "--source",     image_path,
+        "--weights",    weights_path,
         "--name",       run_id,
         "--exist-ok",
     ]
-    if save_txt:
-        command.append("--save-txt")
 
     log_path = output_dir / "log.txt"
     start_ts = time.time()
+
+    from pathlib import Path
 
     download_log = "/" + str(Path("download") / user_name / "detect" / run_id / "log.txt").replace("\\","/")
     download_dir = "/" + str(Path("download") / user_name / "detect" / run_id).replace("\\", "/")
@@ -120,55 +120,6 @@ def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name
                     "log": download_log,
                 }
             else:
-                # 若需要轉換為 xanylabeling 格式
-                if save_txt:
-                    try:
-                        ct_file = ROOT_DIR / "create_train_status_map.json"
-                        dataset_name = None
-                        if ct_file.exists():
-                            try:
-                                with open(ct_file, 'r', encoding='utf-8') as f:
-                                    ct_map = json.load(f)
-                                key = f"{user_name}|{project}|{task}"
-                                if key in ct_map:
-                                    dataset_name = ct_map[key].get("dataset")
-                            except Exception:
-                                pass
-                        
-                        if dataset_name:
-                            yaml_path = ROOT_DIR / "yolov9" / "Dataset" / user_name / dataset_name / "data.yaml"
-                            labels_dir = output_dir / "labels"
-                            
-                            if yaml_path.exists() and labels_dir.exists():
-                                # 讀取類別名稱
-                                with open(yaml_path, 'r', encoding='utf-8') as f:
-                                    import yaml
-                                    data = yaml.safe_load(f)
-                                    class_names = data['names']
-                                
-                                # 轉換單張圖片的標註
-                                img_path = Path(image_path)
-                                txt_file = labels_dir / f"{img_path.stem}.txt"
-                                
-                                if txt_file.exists():
-                                    # 這裡需要使用偵測結果的圖片尺寸，但 detect.py 輸出的是畫框後的圖
-                                    # 為了準確，我們讀取原始上傳圖片的尺寸
-                                    # 注意：如果 detect.py 有 resize，這裡可能會有誤差，但通常 detect.py 輸出圖與原圖尺寸一致或等比例
-                                    # 這裡我們直接用原始圖片路徑
-                                    
-                                    xany_json = convert_yolo_to_xanylabeling(
-                                        txt_path=str(txt_file),
-                                        image_path=str(image_path),
-                                        class_names=class_names
-                                    )
-                                    
-                                    # 儲存 JSON 到輸出目錄
-                                    json_file = output_dir / f"{img_path.stem}.json"
-                                    with open(json_file, 'w', encoding='utf-8') as f:
-                                        json.dump(xany_json, f, indent=2, ensure_ascii=False)
-                    except Exception as e:
-                        print(f"XanyLabeling conversion failed: {e}")
-
                 status = {
                     "state": "done",
                     "log": download_log,
@@ -189,15 +140,14 @@ async def Detectation(
     file: UploadFile    = File(..., description="上傳圖片"),
     PROJECT: str        = Form("", description="專案(上層)名稱"),
     TASK: str           = Form("", description="訓練名稱"),
-    VERSION: str        = Form("", description="版本，可留空使用最新"),
-    SAVE_TXT: bool      = Form(True, description="是否輸出 txt 標註")):
+    VERSION: str        = Form("", description="版本，可留空使用最新")):
 
     # 基礎驗證與正規化
     USER_NAME = _ensure_user_name(USER_NAME)
     _validate_task(PROJECT)
     _validate_task(TASK)
     ver = VERSION.strip() or None
-    weights_path, _ = _resolve_weights(USER_NAME, PROJECT.strip(), TASK.strip(), ver)
+    weights_path = _resolve_weights(USER_NAME, PROJECT.strip(), TASK.strip(), ver)
 
     # 保存圖片
     upload_dir = Path(_runs_root(USER_NAME)) / "uploads"
@@ -208,14 +158,13 @@ async def Detectation(
         shutil.copyfileobj(file.file, img)
 
     run_id = str(uuid.uuid4())[:8]
-    status = await asyncio.to_thread(run_detect, run_id, image_path, weights_path, USER_NAME, SAVE_TXT, PROJECT, TASK)
+    status = await asyncio.to_thread(run_detect, run_id, image_path, weights_path, USER_NAME)
     
     if status.get("state") != "done":
         print(status.get("error", "偵測失敗"))
         raise HTTPException(status_code=500, detail=status.get("error", "偵測失敗"))
 
-    output_dir_value = status.get("output_dir") or DETECT_DOWNLOAD_BASE / USER_NAME / "detect" / run_id
-    output_dir = Path(output_dir_value)
+    output_dir = status.get("output_dir") or DETECT_DOWNLOAD_BASE / USER_NAME / "detect" / run_id
 
     result_path = None
     if output_dir.is_dir():

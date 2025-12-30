@@ -1,6 +1,0 @@
-- Detect.py
---推論完成後會可以選擇需不需要生成labels.txt
-
--Detect_folder.py
---把os.path改成純Pathlib寫法
---新增了推論完成後產生txt檔案labels.txt
