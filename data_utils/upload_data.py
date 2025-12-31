@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-import uuid, zipfile, shutil, subprocess, json, threading, yaml
+import uuid, zipfile, shutil, subprocess, json, threading, yaml, sys
 from datetime import datetime
 from pathlib import Path
 import data_utils.dataset_pipeline as dp
@@ -20,7 +20,7 @@ THUMBS_BASE_DIR   = Path("/shared/thumbs").resolve()
 
 # Dataset 狀態檔與鎖（移到專案根）
 DS_STATUS_FILE = BASE_DIR / "dataset_status_map.json"
-ds_status_lock = threading.Lock()
+ds_status_lock = threading.RLock()
 
 
 def ds_save_status_map(status_map: dict | list):
@@ -115,32 +115,33 @@ def _to_by_user(obj: dict | list) -> dict:
 def _status_list_upsert(user: str, name: str, count: int, now_str: str):
     """依 (user, name) 更新或插入一筆資料，並保留既有的 created_date。"""
     try:
-        cur = ds_load_status_map()
-        grouped = _to_by_user(cur)
-        lst = list(grouped.get(user, []))
-        idx = None
-        created_date = now_str
-        for i, e in enumerate(lst):
-            if isinstance(e, dict) and e.get("name") == name:
-                idx = i
-                cd = e.get("created_date")
-                if isinstance(cd, str) and cd.strip():
-                    created_date = cd
-                break
-        new_entry = {
-            "name":         name,
-            "count":        int(count),
-            "created_date": created_date,
-            "updated_date": now_str,
-        }
-        if idx is None:
-            lst.append(new_entry)
-        else:
-            lst[idx] = new_entry
-        grouped[user] = lst
-        ds_save_status_map(grouped)
-    except Exception:
-        pass
+        with ds_status_lock:
+            cur = ds_load_status_map()
+            grouped = _to_by_user(cur)
+            lst = list(grouped.get(user, []))
+            idx = None
+            created_date = now_str
+            for i, e in enumerate(lst):
+                if isinstance(e, dict) and e.get("name") == name:
+                    idx = i
+                    cd = e.get("created_date")
+                    if isinstance(cd, str) and cd.strip():
+                        created_date = cd
+                    break
+            new_entry = {
+                "name":         name,
+                "count":        int(count),
+                "created_date": created_date,
+                "updated_date": now_str,
+            }
+            if idx is None:
+                lst.append(new_entry)
+            else:
+                lst[idx] = new_entry
+            grouped[user] = lst
+            ds_save_status_map(grouped)
+    except Exception as e:
+        print(f"[ERROR] _status_list_upsert failed: {e}")
 
 
 def _dataset_name_exists_for_user(user: str, name: str) -> bool:
@@ -267,10 +268,10 @@ def _generate_split_txt_balanced(images_dir: str, labels_dir: str, out_dir: str,
         class_txt_path = Path(labels_dir).parent / "class.txt"
 
         cmd = [
-            "python",   str(script_path),
-            "--images", str(images_dir),
-            "--labels", str(labels_dir),
-            "--out",    str(out_dir),
+            sys.executable,     str(script_path),
+            "--images",         str(images_dir),
+            "--labels",         str(labels_dir),
+            "--out",            str(out_dir),
             "--rare-obj-thresh", str(rare_obj_thresh),
             "--class-txt",       str(class_txt_path),
             "--seed", "1"
@@ -587,14 +588,6 @@ async def _append_to_specific_split_impl(
         dp.safe_extract_zip(save_path, tmp_root)
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="zip 檔損毀，無法解壓縮")
-
-    # 4. 嘗試解析類別名稱 (僅供參考，不強制覆蓋)
-    names_from_new: list[str] = []
-    names_yaml_text = dp.extract_nc_names(BASE_DIR, tmp_root)
-    if names_yaml_text:
-        parsed = _parse_names_from_yaml_text(names_yaml_text)
-        if parsed:
-            names_from_new = parsed
 
     # 5. 格式轉換與整理
     # JSON -> YOLO

@@ -93,10 +93,11 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
     
     if save_txt:
         detect_cmd.append("--save-txt")
+        detect_cmd.append("--save-conf")
 
     detect_log_path = shared_run_dir / "detect.log"
-    with open(detect_log_path, "w") as log_file:
-        result = subprocess.run(detect_cmd, stdout=log_file, stderr=subprocess.STDOUT)
+    with open(detect_log_path, "w", encoding="utf-8") as log_file:
+        result = subprocess.run(detect_cmd, stdout=log_file, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         return {"state": "failed", "error": "Detect process failed"}
     time.sleep(0.5)
@@ -112,7 +113,7 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
     ]
     gen_thumbs_exec = next((p for p in gen_thumbs_candidates if p.is_file()), None)
 
-    with open(thumbs_log_path, "w") as log_file:
+    with open(thumbs_log_path, "w", encoding="utf-8") as log_file:
             if gen_thumbs_exec is None:
                 log_file.write("GenThumbs executable not found. Skipping thumbnail generation.\n")
             else:
@@ -121,7 +122,7 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
                     "--src",  str(shared_run_dir / "exp"),
                     "--dest", str(thumbs_run_dir),
                 ]
-                subprocess.run(thumbs_cmd, stdout=log_file, stderr=subprocess.STDOUT)
+                subprocess.run(thumbs_cmd, stdout=log_file, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
 
     # 壓縮結果資料夾為 zip 檔，放在 /shared/download/detect_zips/<user>/<run_id>.zip
     try:
@@ -146,7 +147,8 @@ def run_detect(run_id: str, source_folder: str, weights_path: str, user_name: st
                     print(f"Error reading status map: {e}")
             
             if dataset_name:
-                yaml_path = ROOT_DIR  / "Dataset" / user_norm / dataset_name / "data.yaml"
+                # 修正: 使用 ROOT_DIR / "Dataset"
+                yaml_path = ROOT_DIR / "Dataset" / user_norm / dataset_name / "data.yaml"
                 
                 # 檢查 exp 目錄
                 exp_dir = shared_run_dir / "exp"

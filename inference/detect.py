@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, Form, File, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
-import subprocess, shutil, uuid, sys, os, time, asyncio, json
+import subprocess, shutil, uuid, sys, os, time, asyncio, json, yaml
 from pathlib import Path
 from utils.user_utils import runs_root, ensure_user_name
 from deployment.yolo_to_xanylabeling import convert_yolo_to_xanylabeling
@@ -103,6 +103,7 @@ def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name
     ]
     if save_txt:
         command.append("--save-txt")
+        command.append("--save-conf")
 
     log_path = output_dir / "log.txt"
     start_ts = time.time()
@@ -110,9 +111,11 @@ def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name
     download_log = "/" + str(Path("download") / user_name / "detect" / run_id / "log.txt").replace("\\","/")
     download_dir = "/" + str(Path("download") / user_name / "detect" / run_id).replace("\\", "/")
 
-    with open(log_path, "w") as log_file:
+    # 修正: 使用 with open 確保檔案正確關閉，並處理編碼
+    with open(log_path, "w", encoding="utf-8") as log_file:
         try:
-            result = subprocess.run(command, stdout=log_file, stderr=subprocess.STDOUT)
+            # 修正: 使用 sys.executable 確保使用正確的 python 環境
+            result = subprocess.run(command, stdout=log_file, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
             if result.returncode != 0:
                 status = {
                     "state": "error",
@@ -136,15 +139,18 @@ def run_detect(run_id: str, image_path: str, weights_path: Path | str, user_name
                                 pass
                         
                         if dataset_name:
+                            # 修正: 使用 Path.exists() 檢查
                             yaml_path = ROOT_DIR / "yolov9" / "Dataset" / user_name / dataset_name / "data.yaml"
                             labels_dir = output_dir / "labels"
                             
                             if yaml_path.exists() and labels_dir.exists():
                                 # 讀取類別名稱
                                 with open(yaml_path, 'r', encoding='utf-8') as f:
-                                    import yaml
                                     data = yaml.safe_load(f)
-                                    class_names = data['names']
+                                    class_names = data.get('names', {}) # 使用 get 避免 KeyError
+                                    # 處理 names 可能是 list 或 dict 的情況
+                                    if isinstance(class_names, dict):
+                                        class_names = [class_names[k] for k in sorted(class_names.keys())]
                                 
                                 # 轉換單張圖片的標註
                                 img_path = Path(image_path)
@@ -202,7 +208,10 @@ async def Detectation(
     # 保存圖片
     upload_dir = Path(_runs_root(USER_NAME)) / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    image_path = upload_dir / file.filename
+    
+    # 使用 UUID 防止檔名衝突，避免多工時互相覆蓋
+    safe_filename = f"{uuid.uuid4().hex}_{file.filename}"
+    image_path = upload_dir / safe_filename
 
     with open(image_path, "wb") as img:
         shutil.copyfileobj(file.file, img)
